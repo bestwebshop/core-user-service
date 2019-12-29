@@ -21,7 +21,7 @@ public class UserController {
     @Autowired
     RoleRepository roleRepository;
 
-    @GetMapping("/user/{id}")
+    @GetMapping("/users/{id}")
     public User getUserById(@PathVariable(value = "id") Integer userId) {
         UserDO userFromDB = userRepository.findById(userId).orElseThrow(
                 () -> new ResourceNotFoundException("User", "id", userId)
@@ -35,7 +35,7 @@ public class UserController {
                 userFromDB.getPassword(), roleFromDB);
     }
 
-    @PostMapping("/user")
+    @PostMapping("/users")
     public User createUser(@Valid @RequestBody User user) {
         UserDO userToSave = new UserDO(user.getUsername(), user.getFirstname(), user.getLastname(), user.getPassword(),
                 user.getRole().getId());
