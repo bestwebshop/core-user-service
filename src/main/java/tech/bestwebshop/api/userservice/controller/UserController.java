@@ -1,6 +1,8 @@
 package tech.bestwebshop.api.userservice.controller;
 
+import org.apache.coyote.Response;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -8,6 +10,7 @@ import tech.bestwebshop.api.userservice.exception.ResourceNotFoundException;
 import tech.bestwebshop.api.userservice.model.dataobject.RoleDO;
 import tech.bestwebshop.api.userservice.model.dataobject.SignInDTO;
 import tech.bestwebshop.api.userservice.model.dataobject.UserDO;
+import tech.bestwebshop.api.userservice.model.dataobject.UserToSaveDO;
 import tech.bestwebshop.api.userservice.model.ressource.User;
 import tech.bestwebshop.api.userservice.repository.RoleRepository;
 import tech.bestwebshop.api.userservice.repository.UserRepository;
@@ -26,43 +29,59 @@ public class UserController {
     RoleRepository roleRepository;
 
     @GetMapping("/users/{id}")
-    public User getUserById(@PathVariable(value = "id") Integer userId) {
-        UserDO userFromDB = userRepository.findById(userId).orElseThrow(
-                () -> new ResourceNotFoundException("User", "id", userId)
-        );
+    public ResponseEntity<User> getUserById(@PathVariable(value = "id") Integer userId) {
+        Optional<UserDO> optionalUserDO = userRepository.findById(userId);
+        if(!optionalUserDO.isPresent()){
+            return ResponseEntity.notFound().build();
+        }
+        UserDO userDO = optionalUserDO.get();
 
-        RoleDO roleFromDB = roleRepository.findById(userFromDB.getRoleId()).orElseThrow(
-                () -> new ResourceNotFoundException("Role", "id", userFromDB.getRoleId())
-        );
+        Optional<RoleDO> optionalRoleDO = roleRepository.findById(userDO.getRoleId());
+        if(!optionalRoleDO.isPresent()){
+            return ResponseEntity.notFound().build();
+        }
+        RoleDO roleFromDB = optionalRoleDO.get();
 
-        return new User(userFromDB.getId(), userFromDB.getUsername(), userFromDB.getFirstname(), userFromDB.getLastname(),
-                userFromDB.getPassword(), roleFromDB);
+        User user = new User(userDO.getId(), userDO.getUsername(), userDO.getFirstname(), userDO.getLastname(),
+                userDO.getPassword(), roleFromDB);
+        return ResponseEntity.ok(user);
     }
 
     @PostMapping("/users")
-    public User createUser(@Valid @RequestBody User user) {
-        UserDO userToSave = new UserDO(user.getUsername(), user.getFirstname(), user.getLastname(), user.getPassword(),
-                user.getRole().getId());
-        RoleDO roleToSave = new RoleDO(user.getRole().getId(), user.getRole().getTyp(), user.getRole().getLevel());
-        UserDO savedUser = userRepository.save(userToSave);
-        RoleDO savedRole = roleRepository.findById(savedUser.getRoleId()).orElseThrow(
-                () -> new ResourceNotFoundException("Role", "id", savedUser.getRoleId()));
-        return new User(savedUser.getId(), savedUser.getUsername(), savedUser.getFirstname(), savedUser.getLastname(),
-                savedUser.getPassword(), savedRole);
+    public ResponseEntity<Object> createUser(@Valid @RequestBody UserToSaveDO userToSaveDO) {
+        Optional<RoleDO> optionalRoleDO = roleRepository.findByLevel(userToSaveDO.getRoleLevel());
+        if(!optionalRoleDO.isPresent()){
+            return ResponseEntity.notFound().build();
+        }
+        RoleDO roleDO = optionalRoleDO.get();
+        UserDO userToSave = new UserDO(userToSaveDO.getUsername(), userToSaveDO.getFirstname(), userToSaveDO.getLastname(), userToSaveDO.getPassword(),
+                roleDO.getId());
+        try {
+            UserDO savedUser = userRepository.save(userToSave);
+
+            User user = new User(savedUser.getId(), savedUser.getUsername(), savedUser.getFirstname(),
+                    savedUser.getLastname(), savedUser.getPassword(), roleDO);
+            return ResponseEntity.status(HttpStatus.CREATED).body(user);
+        } catch (DataIntegrityViolationException ex){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Username already taken");
+        } catch (Exception e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+
     }
 
     @PostMapping("/session")
-    public ResponseEntity<User> signIn(@RequestBody @Valid SignInDTO signInDTO){
+    public ResponseEntity<User> signIn(@RequestBody @Valid SignInDTO signInDTO) {
         Optional<UserDO> optionalUserDO = userRepository.findByUsername(signInDTO.getUsername());
-        if(!optionalUserDO.isPresent()){
+        if (!optionalUserDO.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         UserDO dbUser = optionalUserDO.get();
-        if(!(signInDTO.getPassword().equals(dbUser.getPassword()))){
+        if (!(signInDTO.getPassword().equals(dbUser.getPassword()))) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } else {
             Optional<RoleDO> optionalRoleDO = roleRepository.findById(dbUser.getRoleId());
-            if(!optionalRoleDO.isPresent()){
+            if (!optionalRoleDO.isPresent()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }
             RoleDO roleDO = optionalRoleDO.get();
