@@ -12,3 +12,17 @@ eureka:
     lease-renewal-interval-in-seconds: 5
     metadataMap:
       instanceId: "${spring.application.name}:${random.value}"
+
+security:
+  oauth2:
+    client:
+      client-id: webshop-webclient
+      client-secret: supersecretpassword
+      access-token-uri: http://docker.for.win.localhost:9208/oauth/token
+      grant-type: authorization_code
+      user-authorization-uri: http://docker.for.win.localhost:9208/oauth/authorize
+      scope: all.read all.write
+    resource:
+      filter-order: 3
+      jwk:
+        key-set-uri: http://docker.for.win.localhost:9208/oauth2/jwks.json
